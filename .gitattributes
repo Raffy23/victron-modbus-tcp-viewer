@@ -1,0 +1,22 @@
+# Auto detect text files and perform normalization
+*          text=auto
+Dockerfile text
+*.md       text diff=markdown
+*.rs       text diff=rust
+*.toml     text diff=toml
+Cargo.lock text
+*.css      text diff=css
+*.html     text diff=html
+*.js       text
+*.json     text
+*.jsx      text
+*.ts       text
+*.tsx      text
+*.riot     text diff=html
+*.xml      text
+*.xhtml    text diff=html
+package.json      text eol=lf
+package-lock.json text eol=lf -diff
+*.png filter=lfs diff=lfs merge=lfs -text
+*.ico filter=lfs diff=lfs merge=lfs -text
+*.icns filter=lfs diff=lfs merge=lfs -text

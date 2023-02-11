@@ -1,0 +1,132 @@
+<settings class="container">
+  <h3><icon icon="settings"/> Settings</h3>
+  <div class="row">
+  <form class="column column-60 column-offset-20">
+    <fieldset>
+      <legend>Modbus TCP</legend>
+      <label for="modbus_host">Host</label>
+      <input type="text" placeholder="10.0.0.x" id="modbus_host" value={ state.modbusHost } onchange={ onChangeModbusHost }>
+      
+      <label for="modbus_port">Port</label>
+      <input type="number" placeholder="502" id="modbus_port" value={ state.modbusPort } onchange={ onChangeModbusPort }>
+
+      <label for="modbus_refresh">Refresh Interval (ms)</label>
+      <input type="number" placeholder="1000" id="modbus_refresh" value={ 1000 } onchange={ () => {} }>
+    </fieldset>
+    
+    <hr />
+    <fieldset>
+      <legend>Confiugration</legend>
+      <label for="modbus_tcp_registers">Modbus TCP registers list</label>
+      <div class="file-opener">
+        <input type="text" placeholder="CCGX-Modbus-TCP-register-list-2.90.csv" value={ state.modbusRegisters }/>
+        <input class="button-outline" type="button" value="Open" onclick={ onOpenFile }/>
+      </div>
+    </fieldset>
+
+    <hr />
+    <div class="float-right button-bar">
+      <button class="button button-outline" onclick={ cancle }>Cancle</button>
+      <input class="button-primary" type="button" value="Save" onclick={ saveSettings }>
+    </div>
+  </form>
+  </div>
+
+  <script>
+    import { route, router } from '@riotjs/route'
+    import { open } from '@tauri-apps/api/dialog';
+    import Service from '../service.js'
+    
+    export default {
+      state: {
+        modbusHost: undefined,
+        modbusPort: undefined,
+        modbusRegisters: undefined
+      },
+
+      onBeforeMount() {
+        Service.getSettings().then((settings) => {
+          console.log(settings);
+
+          this.update({
+            modbusHost: settings.modbus_host,
+            modbusPort: settings.modbus_port,
+            modbusRegisters: settings.address_mapping_file
+          });
+        })
+      },
+
+      onChangeModbusHost(event) {
+        this.update({
+           modbusHost: event.target.value
+        });
+      },
+
+      onChangeModbusPort(event) {
+        this.update({
+          modbusHost: event.target.value
+        });
+      },
+
+      async onOpenFile() {
+        const selected = await open({
+          multiple: true,
+          filters: [{
+            name: this.state.modbusRegisters,
+            extensions: ['csv']
+          }]
+        });
+        
+        if (selected) {
+          this.update({
+            modbusRegisters: selected[0],
+          });
+        }
+      },
+
+      saveSettings(event) {
+        event.preventDefault();
+
+        Service.setSettings({
+          modbus_host: this.state.modbusHost,
+          modbus_port: this.state.modbusPort,
+          address_mapping_file: this.state.modbusRegisters,
+        }).catch((err) => {
+          console.error('error', err);
+        }).then(() => {
+          router.push('/')
+        });
+      },
+
+      cancle(event) {
+        event.preventDefault();
+         router.push('/')
+      }
+    }
+  </script>
+
+  <style>
+   :host {
+      padding: 2rem 2rem 0 2rem;
+    }
+
+    :host > icon {
+      vertical-align: middle;  
+    }
+
+    .file-opener {
+      display: flex;
+      gap: 1rem;
+    }
+
+    legend {
+      border-bottom: #AAA solid 1px;
+      width: 100%;
+    }
+
+    .button-bar {
+      display: flex;
+      gap: 1rem; 
+    }
+  </style>
+</settings>

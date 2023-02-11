@@ -1,0 +1,45 @@
+<connection-error class="container">
+  <h3><icon icon="alert-octagon"/> Connection Error:</h3>
+  
+  <div class="row">
+    <div class="column column-60 column-offset-20">
+      <p>{ props.route.searchParams.get('message') }</p>
+      <div class="button-bar float-right">
+        <input class="button-outline" type="submit" value="Settings" onclick={ navigateToSettings }>
+        <input class="button-primary" type="submit" value="Try again" onclick={ navigateToPrevious }>
+      </div>
+    <div>
+  </div>
+
+  <script>
+    import { route, router, setBase } from '@riotjs/route'
+
+    export default {
+      navigateToSettings() {
+        router.push('/settings')
+      },
+
+      navigateToPrevious() {
+        router.push(this.props.route.searchParams.get('origin'))
+      }
+    }
+  </script>
+
+  <style>
+    :host {
+      padding-left: 1rem;
+      padding-right: 1rem;
+      max-width: 100%;
+    }
+
+    .button-bar {
+      display: flex;
+      gap: 1.5rem;
+    }
+
+    h3 > icon {
+      vertical-align: middle;
+      color: red;
+    }
+  </style>
+</connection-error>

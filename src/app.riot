@@ -1,0 +1,75 @@
+<app>
+  <router>
+    <div if={state.showNotFound}>
+      <div>
+        <not-found />
+      </div>
+    </div>
+    <div if={!state.showNotFound}>
+      <div>
+        <route each={page in state.pages} path={page.path}>
+          <main is={page.componentName} route={route} />
+        </route>
+      </div>
+    </div>
+  </router>
+
+  <script>
+    import { Router, Route, route, toRegexp, match } from '@riotjs/route'
+    import lazy from '@riotjs/lazy'
+    import NotFound from './pages/not-found.riot'
+    import pages from './pages'
+
+    export default {
+      components: {
+        Router,
+        Route,
+        NotFound,
+        ConnectionError: lazy(() => import(
+          /* webpackPrefetch: true, webpackChunkName: 'pages/connection-error' */
+          './pages/connection-error.riot'
+        )),
+        Viewer: lazy(() => import(
+          /* webpackPrefetch: true, webpackChunkName: 'pages/viewer' */
+          './pages/viewer.riot'
+        )),
+        Settings: lazy(() => import(
+          /* webpackPrefetch: true, webpackChunkName: 'pages/settings' */
+          './pages/settings.riot'
+        )),
+      },
+      state: {
+        pages,
+        showNotFound: false,
+        activePage: null
+      },
+      onBeforeMount({ isServer }) {
+        // create a stream on all routes to catch the not-found page
+        this.anyRouteStream = route('(.*)')
+        this.anyRouteStream.on.value(this.onAnyRoute)
+      },
+      onAnyRoute(path) {
+        // show the not found page if none of the page paths are matched
+        const activePage = pages.find(p => match(path.pathname, toRegexp(p.path)))
+
+        this.update({
+          activePage,
+          showNotFound: !activePage
+        })
+      },
+      onBeforeUnmount() {
+        this.anyRouteStream.end()
+      }
+    }
+  </script>
+
+  <style>
+    :host {
+      max-width: 100%;
+
+      --microtip-transition-duration: 0.18s;
+      --microtip-transition-delay: 1s;
+      --microtip-transition-easing: ease-out;
+    }
+  </style>
+</app>

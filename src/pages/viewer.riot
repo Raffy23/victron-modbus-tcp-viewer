@@ -1,0 +1,512 @@
+<viewer>
+
+  <!-- Top Navbar -->
+  <nav>
+    <div>
+      <icon icon="server" style="padding-top: 0.5rem;"/>
+      <h3>Modbus Registers:</h3>
+    </div>
+    <div>
+      <icon 
+        clickable 
+        aria-label="Refresh all register values"
+        data-microtip-position="left"
+        role="tooltip"
+        icon="refresh-ccw"
+        onclick={ () => loadRegisterValues() }
+      />
+      <icon 
+        clickable 
+        aria-label="App settings"
+        data-microtip-position="left"
+        role="tooltip"
+        icon="settings"
+        onclick={ openSettings }
+      />
+    </div>
+  </nav>
+
+  <!-- Data Table -->
+  <div class="table">
+    <div class="table_header">
+      <icon 
+        icon="filter" 
+        aria-label="Filter Modbus device IDs"
+        data-microtip-position="right"
+        role="tooltip"
+        clickable
+        onclick={ (event) => showOverlay(event, "deviceSearch") }
+        data-enabled={ !!state.search.deviceSearch }
+      /> 
+      Device
+    </div>
+    <div class="table_header">
+      <icon 
+        icon="filter"
+        aria-label="Fitler D-Bus service names"
+        data-microtip-position="right"
+        role="tooltip"
+        clickable
+        onclick={ (event) => showOverlay(event, "nameSearch") }
+        data-enabled={ !!state.search.nameSearch }
+      />
+      Name
+    </div>
+    <div class="table_header">Value</div>
+    <div class="table_header"></div>
+
+    <div class="table_row" each={ item in state.filteredItems }>
+      <div>{ capitalize(/[^\.]*$/.exec(item['dbus-service-name'])[0]) }</div>
+      <div>{ item.description }</div>
+      <div>{ itemValue(item) } { itemUnit(item) }</div>
+      <div class="icon_bar">
+        <icon 
+          clickable 
+          aria-label="Show more details"
+          data-microtip-position="left"
+          role="tooltip"
+          onclick={ () => openDialog(item) }
+          icon="help-circle"
+        />
+        <icon 
+          clickable
+          aria-label="Refresh register value"
+          data-microtip-position="left"
+          role="tooltip"
+          icon="refresh-ccw"
+        />
+        <icon
+          clickable
+          aria-label={ item['writable'] ? "Modify register value" : "Register is read-only!"}
+          data-microtip-position="left"
+          role="tooltip"
+          icon="edit"
+          writable={ item['writable'] }
+        />
+      </div>
+     </div>
+  </div>
+
+  <!-- Info modal -->
+  <micro-modal 
+    id="info-modal" 
+    if={ state.details } 
+    title={`Details: ${ state.details.title }`} 
+    onClose={ closeDialog }>
+   <table>
+      <tbody>
+        <tr><td><b>D-Bus Service name</b></td><td>{ state.details.item['dbus-service-name'] }</td></tr>
+        <tr><td><b>Description</b></td><td>{ state.details.item['description'] }</td></tr>
+        <tr><td><b>Address</b></td><td>{ state.details.item['Address'] }</td></tr>
+        <tr><td><b>Type</b></td><td>{ state.details.item['Type'] }</td></tr>
+        <tr><td><b>Scalefactor</b></td><td>{ state.details.item['Scalefactor'] }</td></tr>
+        <tr><td><b>Scaling</b></td><td>{ state.details.item['scaling'] }</td></tr>
+        <tr><td><b>Range</b></td><td>{ state.details.item['Range'] }</td></tr>
+        <tr><td><b>D-Bus Object path</b></td><td>{ state.details.item['dbus-obj-path'] }</td></tr>
+        <tr><td><b>Writable</b></td><td>{ state.details.item['writable'] }</td></tr>
+        <tr><td><b>D-Bus Unit</b></td><td>{ state.details.item['dbus-unit'] }</td></tr>
+        <tr><td><b>Remarks</b></td><td>{ state.details.item['Remarks'] }</td></tr>
+      </tbody>
+    </table>
+  </micro-modal>
+
+  <!-- Filter overlays -->
+  <div
+    class="overlay"
+    data-show={ state.overlay.deviceSearch.show }
+    style={
+      `top: ${ state.overlay.deviceSearch.y }px;
+       left: ${ state.overlay.deviceSearch.x }px;`
+    }
+  >
+    <input 
+      type="text"
+      placeholder="System"
+      id="overlay_deviceSearch-focus"
+      onkeypress={ (event) => updateSearch(event, "deviceSearch") }
+    />
+    <icon 
+      clickable
+      icon="delete"
+      onclick={ () => clearSearch("deviceSearch") }
+    />
+  </div>
+  <div
+    class="overlay"
+    data-show={ state.overlay.nameSearch.show }
+    data-enabled={ !!state.search.nameSearch }
+    style={
+      `top: ${ state.overlay.nameSearch.y }px;
+       left: ${ state.overlay.nameSearch.x }px;`
+    }
+  >
+    <input 
+      type="text"
+      placeholder=""
+      id="overlay_nameSearch-focus"
+      onkeyup={ (event) => updateSearch(event, "nameSearch") }
+    />
+    <icon
+      clickable
+      icon="delete"
+      onclick={ () => clearSearch("nameSearch") }
+    />
+  </div>
+
+  <script>
+    import { router } from '@riotjs/route'
+
+    import MicroModal from 'micromodal';
+    import microtip from 'microtip/microtip.css'
+
+    import Service from '../service';
+
+    const enumUnitRegexTemplate = /(\d+)=([A-Za-z0-9\-\.\_\:\/'"’ ]+);?/;
+
+    export default {
+      state: {
+        available: new Set(),
+        items: [],
+        filteredItems: [],
+
+        search: {
+          deviceSearch: '',
+          nameSearch: '',
+        },
+
+        refreshTimeout: undefined,
+
+        overlay: {
+          deviceSearch: {
+            show: false,
+            x: 0,
+            y: 0,
+          },
+          nameSearch: {
+            show: false,
+            x: 0,
+            y: 0,
+          },
+        }
+      },
+
+      async onBeforeMount() {
+        await Service.connectModbus().catch((error) => {
+          router.push(`/connection-error?message=${ encodeURIComponent(error) }&origin=${ encodeURIComponent('/') }`)
+        });
+      },
+
+      async onMounted() {
+        const devices = new Set(await Service.availableDevices());
+
+        Service
+          .listRegisters()
+          .then(list => list.filter(item => devices.has(item['dbus-service-name'])))
+          .then(list => {
+            this.state.available = devices;
+            this.state.items = list;
+            this.applyFilter();
+            
+            setInterval(this.loadRegisterValues, 10000);
+            return this.loadRegisterValues(list);
+        });
+      },
+
+      onBeforeUnmount() {
+        clearInterval(this.state.refreshTimeout);
+      },
+
+      async loadRegisterValues(list) {
+        const registerList = list === undefined ? this.state.items : list;
+        const request = registerList.map(item => ({ device: item['dbus-service-name'], address: item.Address }));
+
+        const result = await Service.getRegisterValues(request);
+        result.forEach((item, index) => {
+          this.state.items[index].value = item.error === null 
+            ? item.result 
+            : { Error: item.error };
+        });
+
+        this.update();
+      },
+
+      openDialog(item) {
+        this.update({
+          details: {
+            title: item['dbus-service-name'],
+            item: item
+          },
+          overlay: {
+            deviceSearch: {
+              show: false,
+            },
+            nameSearch: {
+              show: false,
+            },
+          }
+        });
+
+        MicroModal.show('info-modal');
+      },
+
+      closeDialog() {
+        this.update({
+          details: undefined
+        });
+      },
+
+      openSettings() {
+        router.push('/settings')
+      },
+
+      itemValue(item) {
+        if (!item.value) {
+          return 'N/A';
+        }
+
+        if ('Error' in item.value) {
+          return `Error: ${item.value.Error}`;
+        }
+
+        if ('String' in item.value) {
+          return item.value.String;
+        }
+
+        if ('Number' in item.value) {
+          const enumUnitRegex = new RegExp(enumUnitRegexTemplate, 'g');
+          const unit = item['dbus-unit'];
+
+          if(enumUnitRegex.test(unit)) {
+            enumUnitRegex.lastIndex = 0;
+
+            for (const [_, value, label] of unit.matchAll(enumUnitRegex)) {
+              if (item.value.Number == value) {
+                return label;
+              }
+            }
+
+            return `Unkown state: ${item.value.Number}`;
+          }
+
+          return item.value.Number.toFixed(2).replace('.00','');
+        }
+
+        return `Unkown value: ${JSON.stringify(item.value)}`
+      },
+
+      itemUnit(item) {
+        if (!item.value || item.value.String) {
+          return '';
+        }
+
+        if (!item.value.Number || enumUnitRegexTemplate.test(item['dbus-unit'])) {
+          return '';
+        }
+        
+        if (item['dbus-unit'] === 'Degrees celsius') {
+          return '°C';
+        }
+
+         if (item['dbus-unit'] === 'count') {
+          return '';
+        }
+
+        return item['dbus-unit'];
+      },
+
+      applyFilter() {
+        this.update({
+          filteredItems: !this.state.search.deviceSearch && !this.state.search.nameSearch
+            ? this.state.items 
+            : this.state.items.filter((item) => {
+              const matchName = !this.state.search.nameSearch
+                ? true
+                : item['description'].includes(this.state.search.nameSearch);
+
+              const matchDevice = !this.state.search.deviceSearch
+                ? true
+                : this.capitalize(/[^\.]*$/.exec(item['dbus-service-name'])[0]).includes(this.state.search.deviceSearch);
+
+              return matchName && matchDevice;
+            }),
+        });
+      },
+
+      capitalize(string) {
+        return string.charAt(0).toUpperCase() + string.slice(1);
+      },
+
+      showOverlay(event, overlay) {
+        const origin = event.target.getBoundingClientRect();
+
+        for (const [_, el] of Object.entries(this.state.overlay)) {
+          el.show = false;
+        }
+
+        this.update({
+          overlay: {
+            ...this.state.overlay,
+            [overlay]: {
+              show: true,
+              x: origin.x,
+              y: origin.y,
+            }
+          }
+        });
+
+        document.getElementById(`overlay_${overlay}-focus`).focus();
+      },
+
+      closeOverlay(overlay) {
+        document.getElementById(`overlay_${overlay}-focus`).blur();
+        
+        this.update({
+            overlay: {
+              ...this.state.overlay,
+              [overlay]: {
+                show: false,
+                x: 0,
+                y: 0,
+              }
+            }
+        });
+      },
+
+      updateSearch(event, overlay) {
+        if (event.key === "Enter") {
+          event.preventDefault();
+          this.closeOverlay(overlay);
+        }
+
+        this.state.search = {
+          ...this.state.search,
+          [overlay]: event.target.value,
+        };
+
+        this.applyFilter();
+      },
+
+      clearSearch(overlay) {
+        this.state.search = {
+          ...this.state.search,
+          [overlay]: undefined,
+        };
+
+        this.applyFilter();
+        this.closeOverlay(overlay);
+      }
+
+    }
+  </script>
+
+  <style>
+    nav {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 1rem 1rem 0 1rem;
+      position: sticky;
+      top: 0;
+      height: 5rem;
+      background-color: #FFF;
+      z-index: 100;
+    }
+
+    input {
+      width: initial;
+      margin-bottom: 0;
+    }
+
+    nav icon [aria-label][role~="tooltip"]::after {
+      z-index: 110;
+    }
+
+    nav label {
+      display: flex;
+      align-items: center;
+    }
+    
+    nav > div {
+      display: flex;
+      column-gap: 1rem;
+    }
+
+    nav h3 {
+      margin-bottom: unset;
+      margin-top: unset;
+    }
+
+    .table {
+      display: grid;
+      grid-template-columns: repeat(4, auto); 
+      max-width: 100%;
+    }
+    .table_row {
+      display: contents;
+    }
+
+    .table_row div {
+      border-bottom: 1px solid #DDD;
+      padding: 1rem 0 1rem 0;
+    }
+
+    .table div:first-child {
+      padding-left: 1rem;
+    }
+
+    .table_header {
+      background-color: #FFF;
+      position: sticky;
+      top: 5rem;
+      font-weight: 600;
+      border-bottom: 2px solid #333;
+      padding: 1.5rem 0 .5rem 0;
+      display: flex;
+      gap: 1rem;
+      z-index: 100;
+    }
+
+    .table_row div:first-child {
+      padding-left: 1rem;
+    }
+
+    .table_row:nth-child(even) div {
+      background: #EEE
+    }
+
+    .icon_bar {
+      display: flex;
+      text-align: center;
+      justify-content: center;
+      column-gap: 1.5rem;
+    }
+
+    .icon_bar icon:last-child {
+      color: #BBB;
+    }
+
+    .icon_bar icon:last-child[writable="writable"] {
+      color: darkgreen;
+    }
+
+    .overlay {
+      position: absolute;
+      display: none;
+      margin-top: 2em;
+      z-index: 122;
+      background-color: #FFF;
+      border: #333 solid 1px;
+      padding: .5em;
+      gap: 1rem;
+      align-items: center;
+    }
+
+    .overlay[data-show] {
+      display: flex;
+    }
+
+    icon[data-enabled="data-enabled"] {
+      color: #8235b1;
+    }
+  </style>
+</viewer>

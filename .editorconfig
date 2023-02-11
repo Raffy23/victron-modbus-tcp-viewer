@@ -1,0 +1,14 @@
+root = true
+
+# Unix-style newlines with a newline ending every file
+[*]
+charset = utf-8
+indent_style = space
+end_of_line = lf
+insert_final_newline = true
+
+[*.rs]
+indent_size = 4
+
+[*.riot]
+indent_size = 2

@@ -1,0 +1,28 @@
+<icon>
+  <script>
+    import * as feather from 'feather-icons'
+
+    export default {
+      setInnerHTML() {
+        this.root.innerHTML = feather.icons[this.props.icon].toSvg()
+      },
+      onMounted() {
+        this.setInnerHTML()
+      },
+      onUpdated() {
+        this.setInnerHTML()
+      }
+    }
+  </script>
+
+  <style>
+    :host {
+      display: inline;
+      height: 24px;
+    }
+
+    icon[clickable] {
+      cursor: pointer;
+    }
+  </style>
+</icon>
