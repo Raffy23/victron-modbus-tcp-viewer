@@ -4,7 +4,7 @@ Victron ModbusTCP Viewer
 This repository contains a  [Tauri App](https://tauri.app/) that can be used to visualize different registers of the Modbus TCP Server of the Victron Cerbo GX device.
 
 ## Building
-* Make sure Rust (1.59+) and Node (v19.1.0+) is installed
+* Make sure Rust (1.59+) and Node (v20+) is installed
 * Run `npm ci` to install dependencies
 * Run `npm run tauri build` for a production build
 * Copy `./src-tauri/target/release/victron-modbus-tcp-viewer` or the generated bundle to the target directory 
